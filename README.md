@@ -10,7 +10,7 @@
 ---
 
 ## 🚀 Live Demo  
-🔗 **Try the app here:** [Sentiment Predictor on Streamlit Cloud](https://sentiment-analysis-tbijgvqwcyfzawtnxf66wj.streamlit.app)
+🔗 **Try the app here:** [Sentiment Predictor on Streamlit Cloud](https://sentiment-analysis-tbjigvqwcfyzawtnxf66wj.streamlit.app/)
 
 ---
 
@@ -99,14 +99,12 @@ The app will open in your browser at `http://localhost:8501`
 
 ## 👩‍💻 Team Members — Group ONE
 
-| Name | Role |
-|------|------|
-| **Mahankali Dhanush** | Model Training & Data Preprocessing |
-| **Shaik Ajis** | Data Cleaning & Testing |
-| **Saily Vivekanand Dnyaneshwary Kharade** | EDA & Documentation |
-| **Akhilesh Ashok Shahapurkar** | App Development & Deployment |
-| **Nirna Sanjana** | Model Optimization |
-| **Sanda Priyanka** | Presentation & Reporting |
+- **Mahankali Dhanush**
+- **Shaik Ajis**
+- **Saily Vivekanand Dnyaneshwary Kharade**
+- **Akhilesh Ashok Shahapurkar**
+- **Nirna Sanjana**
+- **Sanda Priyanka**
 
 ---
 
