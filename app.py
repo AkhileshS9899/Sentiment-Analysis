@@ -173,7 +173,7 @@ def build_label_map(classes):
     try:
         as_int = [int(c) for c in classes]
         if as_int == [0, 1, 2]:
-            return {0: "negative", 1: "neutral", 2: "positive"}
+           return {0: "positive", 1: "neutral", 2: "negative"}
     except Exception:
         pass
     # string classes → use directly if they match our names
