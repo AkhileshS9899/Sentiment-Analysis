@@ -144,6 +144,47 @@ if reset:
     st.session_state.history = []
     st.rerun()
 
+# --- Sentiment Prediction ---
+EMOJI = {"positive": "🟢", "neutral": "⚪", "negative": "🔴"}
+COLOR = {"positive": POS, "neutral": NEU, "negative": NEG}
+
+def explain_confidence(p):
+    labels = sorted(p.keys(), key=lambda k: p[k], reverse=True)
+    top, second = labels[0], labels[1] if len(labels) > 1 else None
+    margin = p[top] - (p[second] if second else 0.0)
+    if p[top] >= 0.8:
+        return f"The model is **very confident** this text is **{top}** — strong emotional language detected."
+    if p[top] >= 0.6:
+        return f"The model leans **{top}**, but there are some mixed signals."
+    if margin <= 0.1:
+        return f"The text has mixed cues — prediction uncertainty is high."
+    return f"Prediction: **{top}** with moderate confidence."
+
+def get_proba(model, X):
+    try:
+        return model.predict_proba(X)
+    except Exception:
+        return None
+
+def build_label_map(classes):
+    if classes is None:
+        return None
+    # numeric 0/1/2 → neg/neu/pos (your training convention)
+    try:
+        as_int = [int(c) for c in classes]
+        if as_int == [0, 1, 2]:
+            return {0: "negative", 1: "neutral", 2: "positive"}
+    except Exception:
+        pass
+    # string classes → use directly if they match our names
+    lower = [str(c).lower() for c in classes]
+    if {"negative", "neutral", "positive"}.issubset(set(lower)):
+        return {c: str(c).lower() for c in classes}
+    # fallback: alphabetical -> negative, neutral, positive
+    ordered = sorted(classes, key=lambda x: str(x))
+    names = ["negative", "neutral", "positive"]
+    return {c: names[i] if i < 3 else str(c) for i, c in enumerate(ordered)}
+
 if predict_btn and pipeline is not None and text.strip():
     try:
         X = [text]
@@ -151,10 +192,14 @@ if predict_btn and pipeline is not None and text.strip():
         proba = get_proba(pipeline, X)
 
         classes = getattr(pipeline[-1], "classes_", None)
-        label_map = {0:"negative", 1:"neutral", 2:"positive"} if np.array_equal(classes, [0,1,2]) else None
+        label_map = build_label_map(list(classes)) if classes is not None else None
 
         pred = label_map.get(raw_pred[0], str(raw_pred[0])) if label_map else str(raw_pred[0])
-        probs = {label_map.get(c, str(c)): float(proba[0, i]) for i, c in enumerate(classes)} if proba is not None else None
+        probs = (
+            {label_map.get(c, str(c)): float(proba[0, i]) for i, c in enumerate(classes)}
+            if (proba is not None and classes is not None and label_map is not None)
+            else None
+        )
 
         # Display main result
         st.markdown(
@@ -179,7 +224,8 @@ if predict_btn and pipeline is not None and text.strip():
                         <div class="bar"><div class="fill" style="width:{pct}%; background:{COLOR[label]}"></div></div>
                         <div style="width:46px; text-align:right; font-variant-numeric:tabular-nums">{pct}%</div>
                     </div>
-                    """, unsafe_allow_html=True
+                    """,
+                    unsafe_allow_html=True
                 )
 
         # Explanation
@@ -193,27 +239,5 @@ if predict_btn and pipeline is not None and text.strip():
 
     except Exception as e:
         st.error(f"Prediction failed: {e}")
-
-# ----------------------
-# Sentiment History Section
-# ----------------------
-if st.session_state.history:
-    st.markdown("<h4 style='margin-top:30px;'>📜 Recent Predictions</h4>", unsafe_allow_html=True)
-    for item in st.session_state.history[:5]:
-        st.markdown(
-            f"""
-            <div class="history-item" style="border-left:5px solid {COLOR[item['label']]}">
-                <div style="flex:1; text-align:left;">{item['text']}</div>
-                <div style="font-weight:600; color:{COLOR[item['label']]};">{EMOJI[item['label']]} {item['label'].title()}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-# ----------------------
-# Footer
-# ----------------------
-st.divider()
-st.caption("📦 Model trained by Group ONE • Best model: SVM (F1 = 0.772)")
 
 
