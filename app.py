@@ -164,23 +164,20 @@ def get_proba(model, X):
         return None
 
 def build_label_map(classes):
-    """Robust mapping from model classes -> 'positive/neutral/negative' strings."""
     if classes is None:
         return None
-    # numeric 0/1/2 -> pos/neu/neg (your final convention)
     try:
         as_int = [int(c) for c in classes]
+        # FIX: Match original training encoding
         if as_int == [0, 1, 2]:
-            return {0: "positive", 1: "neutral", 2: "negative"}
+            return {0: "negative", 1: "neutral", 2: "positive"}
     except Exception:
         pass
-    # if strings already match expected labels
     lower = [str(c).lower() for c in classes]
     if set(lower) == {"positive", "neutral", "negative"}:
         return {c: str(c).lower() for c in classes}
-    # fallback deterministic order
     ordered = sorted(classes, key=lambda x: str(x))
-    names = ["positive", "neutral", "negative"]
+    names = ["negative", "neutral", "positive"]
     return {c: names[i] if i < 3 else str(c) for i, c in enumerate(ordered)}
 
 # ----------------------
