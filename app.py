@@ -70,10 +70,11 @@ st.markdown(
 )
 
 # ----------------------
-# Load Model Automatically
+# Load Model Automatically (cached)
 # ----------------------
+@st.cache_resource
 def load_pipeline():
-    """Try loading the trained model automatically."""
+    """Load trained pipeline once and cache it."""
     for fname in ["final_sentiment_model.pkl", "mode.pkl"]:
         if os.path.exists(fname):
             try:
@@ -81,7 +82,7 @@ def load_pipeline():
             except Exception:
                 with open(fname, "rb") as f:
                     return pickle.load(f), f"✅ Model Loaded: {fname}"
-    return None, "⚠️ Model file not found. Please ensure final_sentiment_model.pkl exists in this folder."
+    return None, "⚠️ Model file not found. Please keep final_sentiment_model.pkl in the app folder."
 
 pipeline, load_msg = load_pipeline()
 st.markdown(f"<p style='text-align:center; color:#9ca3af;'>{load_msg}</p>", unsafe_allow_html=True)
@@ -93,58 +94,54 @@ if pipeline is not None and hasattr(pipeline, "named_steps"):
     if clf is not None:
         model_name = clf.__class__.__name__
 
-st.markdown(f"<h4 style='color:{PRIMARY}; margin-bottom:1.5rem;'>Model Used: <b>{model_name}</b></h4>", unsafe_allow_html=True)
+st.markdown(
+    f"<h4 style='color:{PRIMARY}; margin-bottom:1.5rem;'>Model Used: <b>{model_name}</b></h4>",
+    unsafe_allow_html=True
+)
 
 # ----------------------
-# Initialize Session State for History
+# Session state
 # ----------------------
 if "history" not in st.session_state:
     st.session_state.history = []
+if "prefill" not in st.session_state:
+    st.session_state.prefill = ""
 
 # ----------------------
-# Input Box + Buttons
+# Example prompts
 # ----------------------
+with st.expander("Try examples"):
+    ex1, ex2, ex3 = st.columns(3)
+    if ex1.button("Loved the acting and story!"):
+        st.session_state["prefill"] = (
+            "I absolutely loved this movie! The acting was incredible and the story was very moving."
+        )
+    if ex2.button("The product arrived today as scheduled"):
+        st.session_state["prefill"] = "The product arrived today as scheduled"
+    if ex3.button("Worst customer service ever"):
+        st.session_state["prefill"] = "Worst customer service ever. Totally unacceptable."
+
+# ----------------------
+# Input + buttons
+# ----------------------
+default_text = st.session_state.get("prefill", "")
 col1, col2 = st.columns([4, 1])
 with col1:
-    text = st.text_area("✍️ Enter your text below:", placeholder="Type or paste your sentence here…", height=150)
+    text = st.text_area("✍️ Enter your text below:", value=default_text, height=150)
 with col2:
     st.write("")  # spacer
     reset = st.button("🔄 Reset", use_container_width=True)
 
 predict_btn = st.button("🔍 Predict Sentiment", type="primary", use_container_width=True)
 
-# ----------------------
-# Sentiment Prediction Logic
-# ----------------------
-EMOJI = {"positive": "🟢", "neutral": "⚪", "negative": "🔴"}
-COLOR = {"positive": POS, "neutral": NEU, "negative": NEG}
-
-def explain_confidence(p):
-    labels = sorted(p.keys(), key=lambda k: p[k], reverse=True)
-    top, second = labels[0], labels[1] if len(labels) > 1 else None
-    margin = p[top] - (p[second] if second else 0.0)
-
-    if p[top] >= 0.8:
-        return f"The model is **very confident** this text is **{top}** — strong emotional language detected."
-    elif p[top] >= 0.6:
-        return f"The model leans **{top}**, but there are some mixed signals."
-    elif margin <= 0.1:
-        return f"The text has mixed cues — prediction uncertainty is high."
-    else:
-        return f"Prediction: **{top}** with moderate confidence."
-
-def get_proba(model, X):
-    try:
-        return model.predict_proba(X)
-    except Exception:
-        return None
-
-# Handle reset
 if reset:
     st.session_state.history = []
+    st.session_state.prefill = ""
     st.rerun()
 
-# --- Sentiment Prediction ---
+# ----------------------
+# Prediction helpers
+# ----------------------
 EMOJI = {"positive": "🟢", "neutral": "⚪", "negative": "🔴"}
 COLOR = {"positive": POS, "neutral": NEU, "negative": NEG}
 
@@ -167,24 +164,28 @@ def get_proba(model, X):
         return None
 
 def build_label_map(classes):
+    """Robust mapping from model classes -> 'positive/neutral/negative' strings."""
     if classes is None:
         return None
-    # numeric 0/1/2 → neg/neu/pos (your training convention)
+    # numeric 0/1/2 -> pos/neu/neg (your final convention)
     try:
         as_int = [int(c) for c in classes]
         if as_int == [0, 1, 2]:
-           return {0: "positive", 1: "neutral", 2: "negative"}
+            return {0: "positive", 1: "neutral", 2: "negative"}
     except Exception:
         pass
-    # string classes → use directly if they match our names
+    # if strings already match expected labels
     lower = [str(c).lower() for c in classes]
-    if {"negative", "neutral", "positive"}.issubset(set(lower)):
+    if set(lower) == {"positive", "neutral", "negative"}:
         return {c: str(c).lower() for c in classes}
-    # fallback: alphabetical -> negative, neutral, positive
+    # fallback deterministic order
     ordered = sorted(classes, key=lambda x: str(x))
-    names = ["negative", "neutral", "positive"]
+    names = ["positive", "neutral", "negative"]
     return {c: names[i] if i < 3 else str(c) for i, c in enumerate(ordered)}
 
+# ----------------------
+# Prediction block
+# ----------------------
 if predict_btn and pipeline is not None and text.strip():
     try:
         X = [text]
@@ -201,7 +202,7 @@ if predict_btn and pipeline is not None and text.strip():
             else None
         )
 
-        # Display main result
+        # Big result chip
         st.markdown(
             f"""
             <div class="pill" style="background:{COLOR.get(pred,'#4F46E5')}22; border-color:{COLOR.get(pred,'#4F46E5')}55; color:white">
@@ -228,16 +229,43 @@ if predict_btn and pipeline is not None and text.strip():
                     unsafe_allow_html=True
                 )
 
-        # Explanation
+            # Top-1 line
+            top = max(probs, key=probs.get)
+            st.caption(f"Top class: **{top.title()}** • Confidence: **{probs[top]*100:.1f}%**")
+
+        # Explanation block
         if probs is not None:
             st.markdown(f"<div class='explainer'>🧠 {explain_confidence(probs)}</div>", unsafe_allow_html=True)
         else:
             st.markdown("<div class='explainer'>🧠 Model does not provide probability estimates; showing label only.</div>", unsafe_allow_html=True)
 
-        # Add to session history
+        # Save to history
         st.session_state.history.insert(0, {"text": text.strip(), "label": pred})
 
     except Exception as e:
         st.error(f"Prediction failed: {e}")
+
+# ----------------------
+# History
+# ----------------------
+if st.session_state.history:
+    st.markdown("<h4 style='margin-top:30px;'>📜 Recent Predictions</h4>", unsafe_allow_html=True)
+    for item in st.session_state.history[:5]:
+        st.markdown(
+            f"""
+            <div class="history-item" style="border-left:5px solid {COLOR[item['label']]}">
+                <div style="flex:1; text-align:left;">{item['text']}</div>
+                <div style="font-weight:600; color:{COLOR[item['label']]};">{EMOJI[item['label']]} {item['label'].title()}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+# ----------------------
+# Footer
+# ----------------------
+st.divider()
+st.caption("📦 Model trained by Group ONE • Best model: SVM (F1 = 0.772)")
+
 
 
